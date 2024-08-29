@@ -56,14 +56,9 @@ def dprint(*message):
         print()
 
 
-def power_down():
-    # hdparm may take a long time, so execute in parallel
-    #
-    for p in [
-        Popen(["hdparm", "-y", d], stdout=PIPE)
-        for d in args.disk_devs
-    ]:
-        p.wait()
+def power_down(dev):
+    p = Popen(["hdparm", "-y", dev], stdout=PIPE)
+    p.wait()
 
 
 def diskstats():
@@ -97,12 +92,13 @@ def hms(s):
 
 # ----- ----- ----- ----- -----
 
-old_stats = None
-last_access = time.time()
-last_standby = last_access
-disk_state = 1
 
 parse_args()
+
+old_stats = {k: None for k in args.disk_devs}
+last_access = {k: time.time() for k in args.disk_devs}
+last_standby = {k: last_access[k] for k in args.disk_devs}
+disk_state = {k: 1 for k in args.disk_devs}
 
 dprint(
     "Monitoring %s. Timeout = %s" % (
@@ -110,22 +106,28 @@ dprint(
     )
 )
 
+loop_count = 0
 while True:
     stats = diskstats()
     stats = {k: v for k, v in list(stats.items()) if k in args.disk_devs}
 
     now = time.time()
 
-    if old_stats and old_stats != stats:
-        last_access = now
-        disk_state = 1
-
-    if now - last_access > args.timeout:
-        if disk_state == 1:
-            disk_state = 0
-
-            dprint("Powering down after %s" % hms(now - last_standby))
-            power_down()
-
+    for dev in args.disk_devs:
+        if dev in old_stats and old_stats[dev] != stats[dev]:
+            last_access[dev] = now
+            disk_state[dev] = 1
+    
+        if now - last_access[dev] > args.timeout:
+            if disk_state[dev] == 1:
+                disk_state[dev] = 0
+    
+                dprint("Powering down after %s: %s" % (hms(now - last_standby), dev))
+                power_down(dev)
+    if loop_count % 60 == 0:
+        idle_times = ["%s: %s" % (dev, hms(now - last_access[dev])) for dev in args.disk_devs]
+        dprint("Idle times: %s" % ", ".join(idle_times))
+    
     old_stats = stats
+    loop_count += 1
     time.sleep(1)
