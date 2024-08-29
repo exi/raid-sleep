@@ -66,14 +66,6 @@ def power_down():
         p.wait()
 
 
-def wake_up():
-    for p in [
-        Popen(["hdparm", "--read-sector", "0", d], stdout=PIPE)
-        for d in args.disk_devs
-    ]:
-        p.wait()
-
-
 def diskstats():
     # see https://www.kernel.org/doc/Documentation/iostats.txt
     #
@@ -125,14 +117,8 @@ while True:
     now = time.time()
 
     if old_stats and old_stats != stats:
-        if disk_state == 0:
-            disk_state = 1
-            last_standby = now
-
-            dprint("Waking up after %s of inactivity" % hms(now - last_access))
-            wake_up()
-
         last_access = now
+        disk_state = 1
 
     if now - last_access > args.timeout:
         if disk_state == 1:
