@@ -115,15 +115,17 @@ while True:
 
     for dev in args.disk_devs:
         if dev in old_stats and old_stats[dev] != stats[dev]:
+            if disk_state[dev] == 0:
+                dprint("Powered up after %s of standby: %s" % (hms(now - last_standby[dev]), dev))
             last_access[dev] = now
             disk_state[dev] = 1
     
         if now - last_access[dev] > args.timeout:
-            last_standby[dev] = now
             if disk_state[dev] == 1:
                 disk_state[dev] = 0
-                dprint("Powering down after %s: %s" % (hms(now - last_standby[dev]), dev))
+                dprint("Powering down: %s" % dev)
                 power_down(dev)
+                last_standby[dev] = now
 
     if loop_count % 60 == 0:
         idle_times = ["%s: %s" % (dev, hms(now - last_access[dev])) for dev in args.disk_devs]
